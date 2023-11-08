@@ -72,9 +72,6 @@ Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemRefe
 		EndIf
 	EndIf
 	If (akBaseItem.HasKeyword(FunctionalDisplaysKeyword) || akBaseItem.HasKeyword(BobbleheadKeyword) || akBaseItem.HasKeyword(PerkMagKeyword) || akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeMine) || akBaseItem.HasKeyword(WeaponTypeThrown) || akBaseItem.HasKeyword(WeaponTypeGrenade) || akBaseItem.HasKeyword(ObjectTypeAmmo) || akBaseItem.HasKeyword(ObjectTypeSyringerAmmo) || akBaseItem.HasKeyword(AnimFurnWater) || akBaseItem.HasKeyword(ObjectTypeWater) || akBaseItem.HasKeyword(ObjectTypeDrink) || akBaseItem.HasKeyword(ObjectTypeNukaCola) || akBaseItem.HasKeyword(ObjectTypeAlcohol) || akBaseItem.HasKeyword(ObjectTypeFood) || akBaseItem.HasKeyword(ObjectTypeStimpak) || akBaseItem.HasKeyword(ObjectTypeChem) || akBaseItem.HasKeyword(NotJunkJetAmmo) || akBaseItem.HasKeyword(FeaturedItem))
-		Self.DeleteFDItems()
-		Self.DeleteFDMountItems()
-
 		int count = 0
 		while (count < FDContainerItemTypeArray.length)
 			if (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
@@ -85,37 +82,51 @@ Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemRefe
 			endif
 			count += 1
 		endwhile
-
-		Self.RecalculateFDItemsInContainer()
-
-		Utility.Wait(0.1)
-		Self.DisplayFDItems()
-		Self.DisplayFDMountItems()
 	EndIf
 EndEvent
 
 Function DisplayFDItems()
 	Debug.Trace("DisplayFDItems called!", 2) 
-	int MaxCount = FunctionalDisplaysStructArray.length
+	int MaxCount = FDItemsInContainer.length
 	If (MaxCount > 0)
 		int Count = 0
-		While (Count < MaxCount && Count < FDItemsInContainer.length)
-			Debug.Trace("DisplayFDMountItems: Displaying: "+FDItemsInContainer[Count].GetFormID(), 2)
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, FDItemsInContainer[Count], 1, False, False, False, True)
-			Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword)
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetNoFavorAllowed(True)
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetPlayerHasTaken(True)
+		While (Count < MaxCount)
+			Debug.Trace("DisplayFDItems: Displaying: "+FDItemsInContainer[Count].GetFormID(), 2)
+			if(!FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
+				Debug.Trace("DisplayFDMountItems: Displaying: "+FDItemsInContainer[Count].GetFormID(), 2)
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, FDItemsInContainer[Count], 1, False, False, False, True)
+				Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword)
+				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetNoFavorAllowed(True)
+				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetPlayerHasTaken(True)
+			endif
 			Count += 1
 		EndWhile
 	EndIf
 EndFunction
 
 Event ObjectReference.OnContainerChanged(ObjectReference akSender, ObjectReference akNewContainer, ObjectReference akOldContainer)
+	Debug.Trace("OnContainerChanged called!", 2) 
 	Self.UnregisterForRemoteEvent(akSender, "OnContainerChanged")
-	Self.RemoveItem(akSender.GetBaseObject(), 1, False, None)
 	akSender.RemoveKeyword(BlockWorkshopInteractionKeyword)
+	Self.RemoveItem(akSender.GetBaseObject(), 1, False, None)
+	
+	Utility.Wait(0.1)
+
+	int count = 0
+	while (count < FunctionalDisplaysStructArray.length)
+		if (FunctionalDisplaysStructArray[count].FDItemDisplayRef == akSender)
+			FunctionalDisplaysStructArray[count].FDItemDisplayRef = none
+			count = 999
+		endif
+		count += 1
+	endwhile
+	
+	if(!Self.RecalculateFDItemsInContainer())
+		Self.DeleteFDItems()
+	endif
+	Self.DisplayFDItems()
 EndEvent
 
 Function DeleteFDItems()
@@ -132,9 +143,9 @@ Function DeleteFDItems()
 	EndWhile
 EndFunction
 
-Function RecalculateFDItemsInContainer()
-	Debug.Trace("RecalculateFDItemsInContainer called!", 2)
-	FDItemsInContainer = new Form[0]
+bool Function RecalculateFDItemsInContainer()
+	;Debug.Trace("RecalculateFDItemsInContainer called!", 2)
+	Form[] FDItemsInContainerNew = new Form[0]
 	int MaxCount = FunctionalDisplaysStructArray.length
 	int count = 0
 	int displayedcount = 0
@@ -145,15 +156,30 @@ Function RecalculateFDItemsInContainer()
 			todisplay = maxcount - count  
 		endif
 		int displayed = 0
-		Debug.Trace("RecalculateFDItemsInContainer: displaying item: "+item.formId+" "+todisplay+" times", 2)
+		;Debug.Trace("RecalculateFDItemsInContainer: displaying item: "+item.formId+" "+todisplay+" times", 2)
 		while (displayed < todisplay)
-			FDItemsInContainer.add(item.formObj,1)
-			Debug.Trace("RecalculateFDItemsInContainer: added item to display: "+item.formId, 2)
+			FDItemsInContainerNew.add(item.formObj,1)
+			;Debug.Trace("RecalculateFDItemsInContainer: added item to display: "+item.formId, 2)
 			displayed += 1
 		endwhile
 		displayedcount += todisplay
 		count += 1
 	endwhile
+
+	bool same = true
+	if (FDItemsInContainer.Length == FDItemsInContainerNew.Length)
+		count = 0
+		while (same && count < FDItemsInContainer.Length)
+			same = FDItemsInContainer[count].GetFormID() == FDItemsInContainerNew[count].GetFormID()
+			count += 1
+		endwhile
+	else
+		same = false
+	endif
+
+	FDItemsInContainer = FDItemsInContainerNew
+
+	return same 
 EndFunction
 
 Function DisplayFDMountItems()
@@ -179,7 +205,7 @@ Function DeleteFDMountItems()
 	int MaxCount = FDMountStructArray.length
 	int Count = 0
 	While (Count < MaxCount)
-		If (FDMountStructArray[Count].FDMountItemDisplayRef)
+		If (FDMountStructArray[Count].FDMountItemDisplayRef != none)
 			FDMountStructArray[Count].FDMountItemDisplayRef.DisableNoWait(False)
 			FDMountStructArray[Count].FDMountItemDisplayRef.Delete()
 			FDMountStructArray[Count].FDMountItemDisplayRef = None
@@ -210,9 +236,10 @@ Event OnWorkshopObjectMoved(ObjectReference akReference)
 EndEvent
 
 int Function Log10(int number)
-	int result = 1
-	While (number > 10)
-		number /= 10
+	int result = 0
+	int power = 1
+	While (number >= power)
+		power *= 10
 		result += 1
 	EndWhile
 	return result
@@ -237,7 +264,7 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
 			Debug.Trace("OnItemAdded: searching for item type", 2)
 			if (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
 				FDContainerItemTypeArray[count].count += aiItemCount
-				Debug.Trace("OnItemAdded: item type found", 2)
+				Debug.Trace("OnItemAdded: item type found item count: "+FDContainerItemTypeArray[count].count, 2)
 				hasfound = 1
 			endif
 			count += 1
@@ -256,7 +283,6 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
 		Self.RemoveItem(akBaseItem, aiItemCount, False, Game.GetPlayer() as ObjectReference)
 		FunctionalDisplaysContainerWrongMessage.Show(0, 0, 0, 0, 0, 0, 0, 0, 0)
 	EndIf
-	Self.RecalculateFDItemsInContainer()
 EndEvent
 
 Event OnWorkshopObjectDestroyed(ObjectReference akActionRef)
@@ -274,8 +300,13 @@ Auto State AllowActivate
 		If (akActionRef == Game.GetPlayer() as ObjectReference)
 			Self.DeleteFDItems()
 			Self.DeleteFDMountItems()
-			Self.RecalculateFDItemsInContainer()
 			Utility.Wait(0.1)
+			if(Self.GetItemCount() == 0)
+				FDItemsInContainer = new Form[0]
+				FDContainerItemTypeArray = new FDContainerItemType[0]
+				FDMountItemsInContainer = new Form[0]
+			ENDIF
+			Self.RecalculateFDItemsInContainer()
 			Self.DisplayFDItems()
 			Self.DisplayFDMountItems()
 		EndIf
