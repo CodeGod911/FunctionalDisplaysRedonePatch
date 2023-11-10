@@ -64,7 +64,7 @@ bool AlreadyLoaded
 
 Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akDestContainer)
 	Debug.Trace("OnItemRemoved called!", 2) 
-	If ( akBaseItem.HasKeyword(BobbleheadKeyword) || akBaseItem.HasKeyword(PerkMagKeyword) || akBaseItem.HasKeyword(WeaponTypeMine) || akBaseItem.HasKeyword(WeaponTypeGrenade) || akBaseItem.HasKeyword(ObjectTypeAmmo) || akBaseItem.HasKeyword(ObjectTypeSyringerAmmo) || akBaseItem.HasKeyword(AnimFurnWater) || akBaseItem.HasKeyword(ObjectTypeWater) || akBaseItem.HasKeyword(ObjectTypeDrink) || akBaseItem.HasKeyword(ObjectTypeNukaCola) || akBaseItem.HasKeyword(ObjectTypeAlcohol) || akBaseItem.HasKeyword(ObjectTypeFood) || akBaseItem.HasKeyword(ObjectTypeStimpak) || akBaseItem.HasKeyword(ObjectTypeChem) || akBaseItem.HasKeyword(NotJunkJetAmmo) || akBaseItem.HasKeyword(FeaturedItem))
+	If (!(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown)))
 		int count = 0
 		while (count < FDContainerItemTypeArray.length)
 			if (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
@@ -95,15 +95,20 @@ Function DisplayFDItems()
 	If (MaxCount > 0)
 		int Count = 0
 		int ContainerCount = 0
-		While (Count < FDItemsInContainer.Length)
+		While (Count < MaxCount && ContainerCount < FDItemsInContainer.Length)
 			if(!FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
-				Debug.Trace("DisplayFDItems Item: Displaying: "+FDItemsInContainer[Count].GetFormID(), 2)
-				FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, FDItemsInContainer[Count], 1, False, False, False, True)
+				Debug.Trace("DisplayFDItems Item: Displaying: "+FDItemsInContainer[ContainerCount].GetFormID(), 2)
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, FDItemsInContainer[ContainerCount], 1, False, False, False, True)
 				Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
 				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
 				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword)
 				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetNoFavorAllowed(True)
 				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetPlayerHasTaken(True)
+				ContainerCount += 1
+			else 
+				if (FunctionalDisplaysStructArray[Count].FDItemDisplayRef.GetBaseObject().GetFormID() == FDItemsInContainer[ContainerCount].GetFormID())
+					ContainerCount += 1
+				endif
 			endif
 			Count += 1
 		EndWhile
@@ -135,8 +140,10 @@ Event ObjectReference.OnContainerChanged(ObjectReference akSender, ObjectReferen
 	akSender.RemoveKeyword(BlockWorkshopInteractionKeyword)
 	
 	Form akBaseItem = akSender.GetBaseObject()
-	If (akBaseItem.HasKeyword(BobbleheadKeyword) || akBaseItem.HasKeyword(PerkMagKeyword) || akBaseItem.HasKeyword(WeaponTypeMine) || akBaseItem.HasKeyword(WeaponTypeGrenade) || akBaseItem.HasKeyword(ObjectTypeAmmo) || akBaseItem.HasKeyword(ObjectTypeSyringerAmmo) || akBaseItem.HasKeyword(AnimFurnWater) || akBaseItem.HasKeyword(ObjectTypeWater) || akBaseItem.HasKeyword(ObjectTypeDrink) || akBaseItem.HasKeyword(ObjectTypeNukaCola) || akBaseItem.HasKeyword(ObjectTypeAlcohol) || akBaseItem.HasKeyword(ObjectTypeFood) || akBaseItem.HasKeyword(ObjectTypeStimpak) || akBaseItem.HasKeyword(ObjectTypeChem) || akBaseItem.HasKeyword(NotJunkJetAmmo) || akBaseItem.HasKeyword(FeaturedItem))
+	If (!(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown)))
 		Self.RemoveItem(akBaseItem, 1, False, None)
+	else
+		Self.DeleteFDItems()
 	endif
 
 	Utility.Wait(0.1)
@@ -282,31 +289,29 @@ Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemRefere
 			endwhile
 			return
 	Else 
-		If (akBaseItem.HasKeyword(BobbleheadKeyword) || akBaseItem.HasKeyword(PerkMagKeyword) || akBaseItem.HasKeyword(WeaponTypeGrenade) || akBaseItem.HasKeyword(ObjectTypeAmmo) || akBaseItem.HasKeyword(WeaponTypeMine) || akBaseItem.HasKeyword(ObjectTypeSyringerAmmo) || akBaseItem.HasKeyword(AnimFurnWater) || akBaseItem.HasKeyword(ObjectTypeWater) || akBaseItem.HasKeyword(ObjectTypeDrink) || akBaseItem.HasKeyword(ObjectTypeNukaCola) || akBaseItem.HasKeyword(ObjectTypeAlcohol) || akBaseItem.HasKeyword(ObjectTypeFood) || akBaseItem.HasKeyword(ObjectTypeStimpak) || akBaseItem.HasKeyword(ObjectTypeChem) || akBaseItem.HasKeyword(NotJunkJetAmmo) || akBaseItem.HasKeyword(FeaturedItem))
-			Debug.Trace("OnItemAdded: item accepted", 2)
+		Debug.Trace("OnItemAdded: item accepted", 2)
 			
-			int count = 0
-			int hasfound = 0
-			While (count < FDContainerItemTypeArray.Length)
-				Debug.Trace("OnItemAdded: searching for item type", 2)
-				If (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
-					FDContainerItemTypeArray[count].count += aiItemCount
-					Debug.Trace("OnItemAdded: item type ("+akBaseItem.GetFormID()+") found item count: "+FDContainerItemTypeArray[count].count, 2)
-					hasfound = 1
-				EndIf
-				count += 1
-			EndWhile
-
-			if(hasfound == 0)
-				FDContainerItemType item = new FDContainerItemType
-				item.formId = akBaseItem.GetFormID()
-				item.formObj = akBaseItem
-				item.count = aiItemCount
-				FDContainerItemTypeArray.Add(item)
-				Debug.Trace("OnItemAdded: new item type added ("+akBaseItem.GetFormID()+"). Item type count: "+FDContainerItemTypeArray.Length, 2)
+		int count = 0
+		int hasfound = 0
+		While (count < FDContainerItemTypeArray.Length)
+			Debug.Trace("OnItemAdded: searching for item type", 2)
+			If (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
+				FDContainerItemTypeArray[count].count += aiItemCount
+				Debug.Trace("OnItemAdded: item type ("+akBaseItem.GetFormID()+") found item count: "+FDContainerItemTypeArray[count].count, 2)
+				hasfound = 1
 			EndIf
-			return
-		endif
+			count += 1
+		EndWhile
+
+		if(hasfound == 0)
+			FDContainerItemType item = new FDContainerItemType
+			item.formId = akBaseItem.GetFormID()
+			item.formObj = akBaseItem
+			item.count = aiItemCount
+			FDContainerItemTypeArray.Add(item)
+			Debug.Trace("OnItemAdded: new item type added ("+akBaseItem.GetFormID()+"). Item type count: "+FDContainerItemTypeArray.Length, 2)
+		EndIf
+		return
 	EndIf
 
 	Debug.Trace("OnItemAdded: item rejected", 2)
