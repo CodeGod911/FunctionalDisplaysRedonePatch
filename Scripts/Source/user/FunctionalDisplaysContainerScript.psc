@@ -333,7 +333,20 @@ Event OnWorkshopObjectGrabbed(ObjectReference akReference)
 EndEvent
 
 Event OnWorkshopObjectMoved(ObjectReference akReference)
-	; Empty function
+	int MaxCount = FunctionalDisplaysStructArray.length
+	If (MaxCount > 0)
+		int Count = 0
+		
+		While (Count < MaxCount)
+			if(FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
+				Form akBaseItem = FunctionalDisplaysStructArray[Count].FDItemDisplayRef.GetBaseObject()
+				if(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown))
+					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SplineTranslateToRefNode(Self, FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, 0, 10000, 0)
+				endif
+			endif
+			Count += 1
+		EndWhile
+	EndIf
 EndEvent
 
 ;-- State -------------------------------------------
