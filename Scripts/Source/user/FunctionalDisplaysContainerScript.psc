@@ -3,6 +3,8 @@ ScriptName FunctionalDisplaysContainerScript extends ObjectReference
 ;-- Structs -----------------------------------------
 Struct FunctionalDisplaysStruct
 	ObjectReference FDItemDisplayRef
+	FDContainerItemType item
+
 	{ This will hold the currently displayed FDItem reference. }
 	string FunctionalDisplaysNode
 	{ The node the FDItem should be placed at. }
@@ -46,12 +48,10 @@ Keyword Property ObjectTypeChem Auto Const
 Keyword Property NotJunkJetAmmo Auto Const
 Keyword Property BlockWorkshopInteractionKeyword Auto Const
 Keyword Property FeaturedItem Auto Const
-Form[] Property FDItemsInContainer Auto
-FDContainerItemType[] Property FDWeaponsInContainer Auto
+FDContainerItemType[] Property FDItemsInContainer Auto
 Form[] Property FDMountItemsInContainer Auto
 { Array of current DisplayedItems that are in the container. }
 FunctionalDisplaysStruct[] Property FunctionalDisplaysStructArray Auto
-FDMountStruct[] Property FDMountStructArray Auto
 FDContainerItemType[] Property FDContainerItemTypeArray Auto
 { Struct Array of each display DisplayedItem ref, and the node it should go to. }
 Message Property FunctionalDisplaysContainerFullMessage Auto
@@ -64,29 +64,52 @@ bool AlreadyLoaded
 
 Event OnItemRemoved(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akDestContainer)
 	Debug.Trace("OnItemRemoved called!", 2) 
-	If (!(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown)))
-		int count = 0
-		while (count < FDContainerItemTypeArray.length)
-			if (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
-				FDContainerItemTypeArray[count].count -= aiItemCount
-				if(FDContainerItemTypeArray[count].count <= 0)
-					FDContainerItemTypeArray.Remove(count)
-				endif
-				count = 129
+	int count = 0
+	while (count < FDContainerItemTypeArray.length)
+		if (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
+			FDContainerItemTypeArray[count].count -= aiItemCount
+			Debug.Trace("OnItemRemoved removed "+akBaseItem.GetFormID()+" "+aiItemCount+" times", 2) 
+			if(FDContainerItemTypeArray[count].count <= 0)
+				FDContainerItemTypeArray.Remove(count)
 			endif
+			count = 129
+		endif
+		count += 1
+	endwhile
+EndEvent
+
+Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akSourceContainer)
+	Debug.Trace("OnItemAdded called! aiItemCount: "+ aiItemCount, 2)
+
+	
+	int count = 0
+	int hasfound = 0
+	if (!IsWeapon(akBaseItem))
+		While (count < FDContainerItemTypeArray.Length)
+			Debug.Trace("OnItemAdded: searching for item type", 2)
+			If (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
+				FDContainerItemTypeArray[count].count += aiItemCount
+				Debug.Trace("OnItemAdded: item type ("+akBaseItem.GetFormID()+") found item count: "+FDContainerItemTypeArray[count].count, 2)
+				hasfound = 1
+			EndIf
 			count += 1
-		endwhile
+		EndWhile
 	EndIf
-	;If (akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown))
-	;	int count = 0
-	;	while (count < FDWeaponsInContainer.length)
-	;		if (FDWeaponsInContainer[count] == akBaseItem)
-	;			FDWeaponsInContainer.Remove(count)
-	;			count = 129
-	;		endif
-	;		count += 1
-	;	endwhile
-	;endif
+
+	if(hasfound == 0)
+		FDContainerItemType item = new FDContainerItemType
+		item.formId = akBaseItem.GetFormID()
+		item.formObj = akBaseItem
+		
+		item.count = aiItemCount
+		FDContainerItemTypeArray.Add(item)
+		Debug.Trace("OnItemAdded: new item type added ("+akBaseItem.GetFormID()+"). Item type count: "+FDContainerItemTypeArray.Length, 2)
+	EndIf
+	return
+
+	;/ Debug.Trace("OnItemAdded: item rejected", 2)
+	Self.RemoveItem(akBaseItem, aiItemCount, False, Game.GetPlayer() as ObjectReference)
+	FunctionalDisplaysContainerWrongMessage.Show(0, 0, 0, 0, 0, 0, 0, 0, 0) /;
 EndEvent
 
 Function DisplayFDItems()
@@ -94,42 +117,25 @@ Function DisplayFDItems()
 	int MaxCount = FunctionalDisplaysStructArray.length
 	If (MaxCount > 0)
 		int Count = 0
-		int ContainerCount = 0
-		While (Count < MaxCount && ContainerCount < FDItemsInContainer.Length)
+		While (Count < MaxCount && Count < FDItemsInContainer.Length)
 			if(!FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
-				Debug.Trace("DisplayFDItems Item: Displaying: "+FDItemsInContainer[ContainerCount].GetFormID(), 2)
-				FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, FDItemsInContainer[ContainerCount], 1, False, False, False, True)
-				Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
-				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
-				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword)
-				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetNoFavorAllowed(True)
-				;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetPlayerHasTaken(True)
-				ContainerCount += 1
-			else 
-				if (FunctionalDisplaysStructArray[Count].FDItemDisplayRef.GetBaseObject().GetFormID() == FDItemsInContainer[ContainerCount].GetFormID())
-					ContainerCount += 1
-				endif
-			endif
-			Count += 1
-		EndWhile
-
-		ContainerCount = 0
-		While (Count < MaxCount && ContainerCount < FDWeaponsInContainer.Length)
-			While (Count < MaxCount && Self.GetItemCount(FDWeaponsInContainer[ContainerCount].formObj)>0)
-				if(!FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
-					Debug.Trace("DisplayFDItems: Displaying: "+FDWeaponsInContainer[ContainerCount].formObj.GetFormID(), 2)
-					FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.DropObject(FDWeaponsInContainer[ContainerCount].formobj,1)
+				Debug.Trace("DisplayFDItems Item: Displaying: "+FDItemsInContainer[Count].formId, 2)
+				FDContainerItemType item = FDItemsInContainer[Count]
+				FunctionalDisplaysStructArray[Count].item = item
+				if(IsWeapon(item.formObj))
+					FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.DropObject(FDItemsInContainer[Count].formobj,1)
+					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.MoveToNode(self,FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode)
 					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.WaitFor3DLoad()
 					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
-					Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
-					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword)
 					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SplineTranslateToRefNode(Self, FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, 0, 10000, 0)
-					;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetNoFavorAllowed(True)
-					;FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetPlayerHasTaken(True)
+				else
+					FunctionalDisplaysStructArray[Count].FDItemDisplayRef = Self.PlaceAtNode(FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, item.formObj, item.count, False, False, False, True)
+					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SetMotionType(Self.Motion_Keyframed, False)
 				endif
-				Count += 1
-			EndWhile
-			ContainerCount += 1
+				Self.RegisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.AddKeyword(BlockWorkshopInteractionKeyword) 
+			endif
+			Count += 1
 		EndWhile
 	EndIf
 EndFunction
@@ -138,28 +144,40 @@ Event ObjectReference.OnContainerChanged(ObjectReference akSender, ObjectReferen
 	Debug.Trace("OnContainerChanged called!", 2) 
 	Self.UnregisterForRemoteEvent(akSender, "OnContainerChanged")
 	akSender.RemoveKeyword(BlockWorkshopInteractionKeyword)
-	
-	Form akBaseItem = akSender.GetBaseObject()
-	If (!(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown)))
-		Self.RemoveItem(akBaseItem, 1, False, None)
-	else
-		Self.DeleteFDItems()
-	endif
 
-	Utility.Wait(0.1)
-
-	int count = 0
-	while (count < FunctionalDisplaysStructArray.length)
-		if (FunctionalDisplaysStructArray[count].FDItemDisplayRef == akSender)
-			FunctionalDisplaysStructArray[count].FDItemDisplayRef = none
-			count = 999
+	FunctionalDisplaysStruct itemTaken = new FunctionalDisplaysStruct
+	int i = 0
+	bool stop = false
+	While (i < FunctionalDisplaysStructArray.length && !stop)
+		if(FunctionalDisplaysStructArray[i].FDItemDisplayRef == akSender)
+			itemTaken = FunctionalDisplaysStructArray[i]
+			stop = true
+		else
+			i += 1
 		endif
-		count += 1
-	endwhile
+	EndWhile
+	Debug.Trace("OnContainerChanged called 1! "+i, 2) 
+
+	If (!IsWeapon(itemTaken.FDItemDisplayRef))
+		Self.RemoveItem(itemTaken.item.formObj, itemTaken.item.count, False, None)
+		Utility.Wait(0.1)
+	endif
+	Debug.Trace("OnContainerChanged called! 2", 2) 
+	FunctionalDisplaysStructArray[i].FDItemDisplayRef = none
+	FunctionalDisplaysStructArray[i].item = none
+
 	
-	if(!Self.RecalculateFDItemsInContainer())
+	Debug.Trace("OnContainerChanged called!3", 2) 
+	if(IsWeapon(akSender))
+		Self.DeleteFDItems()
+		Self.RecalculateFDItemsInContainer()
+		Debug.Trace("OnContainerChanged called4!", 2) 
+	elseif !Self.RecalculateFDItemsInContainer()
 		Self.DeleteFDItems()
 	endif
+
+
+	Debug.Trace("OnContainerChanged called5!", 2) 
 	Self.DisplayFDItems()
 EndEvent
 
@@ -168,35 +186,70 @@ Function DeleteFDItems()
 	int MaxCount = FunctionalDisplaysStructArray.length
 	int Count = 0
 	While (Count < MaxCount)
-		If (FunctionalDisplaysStructArray[Count].FDItemDisplayRef && !(FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(ObjectTypeWeapon) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypePistol) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeRifle) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeMelee1H) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeMelee2H) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeHeavyGun) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeHandToHand) || FunctionalDisplaysStructArray[Count].FDItemDisplayRef.HasKeyword(WeaponTypeThrown)))
+		If (FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
 			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.DisableNoWait(False)
-			FunctionalDisplaysStructArray[Count].FDItemDisplayRef.Delete()
+			if(IsWeapon(FunctionalDisplaysStructArray[Count].FDItemDisplayRef))
+				Self.UnregisterForRemoteEvent(FunctionalDisplaysStructArray[Count].FDItemDisplayRef, "OnContainerChanged")
+				Self.AddItem(FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
+			else
+				FunctionalDisplaysStructArray[Count].FDItemDisplayRef.Delete()
+			endif
 			FunctionalDisplaysStructArray[Count].FDItemDisplayRef = None
+			FunctionalDisplaysStructArray[Count].item = None
 		EndIf
 		Count += 1
 	EndWhile
+	
+	Utility.Wait(0.1)
 EndFunction
 
 bool Function RecalculateFDItemsInContainer()
-	;Debug.Trace("RecalculateFDItemsInContainer called!", 2)
-	Form[] FDItemsInContainerNew = new Form[0]
-	int MaxCount = FunctionalDisplaysStructArray.length
+	Debug.Trace("RecalculateFDItemsInContainer called!", 2)
+	FDContainerItemType[] FDItemsInContainerNew = new FDContainerItemType[0]
+
 	int count = 0
-	int displayedcount = 0
-	while (MaxCount > displayedcount && FDContainerItemTypeArray.Length > count)
+	
+	While (FDContainerItemTypeArray.Length > count)
 		FDContainerItemType item = FDContainerItemTypeArray[count]
-		int todisplay = Self.Log10(item.count)
-		if(count + todisplay > maxcount)
-			todisplay = maxcount - count  
+
+		int nextItemCountToDisplay = 10
+		int itemCountLeft = item.count
+		While (itemCountLeft>0)
+			FDContainerItemType displayItem = new FDContainerItemType
+			displayItem.formId = item.formId
+			displayItem.formObj = item.formObj
+
+			if(nextItemCountToDisplay <= itemCountLeft)
+				itemCountLeft -= nextItemCountToDisplay
+			else
+				nextItemCountToDisplay = itemCountLeft
+				itemCountLeft = 0
+			endif
+
+			if(item.formObj.HasKeyword(ObjectTypeAmmo) && !IsWeapon(item.formObj))
+				displayItem.count = nextItemCountToDisplay
+			else
+				displayItem.count = 1
+			endif
+			
+			FDItemsInContainerNew.add(displayItem)
+			Debug.Trace("RecalculateFDItemsInContainer: added item to display: "+displayItem.formId+" "+displayItem.count+"times", 2)
+			nextItemCountToDisplay *= 10
+		EndWhile
+
+		count += 1
+	EndWhile
+
+	count = 0
+
+	While (FunctionalDisplaysStructArray.Length > count)
+		if(FunctionalDisplaysStructArray[count].FDItemDisplayRef && IsWeapon(FunctionalDisplaysStructArray[count].FDItemDisplayRef))
+			FDContainerItemType displayItem = new FDContainerItemType
+			displayItem.formId = FunctionalDisplaysStructArray[count].FDItemDisplayRef.GetFormID()
+			displayItem.formObj = FunctionalDisplaysStructArray[count].FDItemDisplayRef.GetBaseObject()
+			displayItem.count = 1
+			FDItemsInContainerNew.add(displayItem)
 		endif
-		int displayed = 0
-		;Debug.Trace("RecalculateFDItemsInContainer: displaying item: "+item.formId+" "+todisplay+" times", 2)
-		while (displayed < todisplay)
-			FDItemsInContainerNew.add(item.formObj,1)
-			;Debug.Trace("RecalculateFDItemsInContainer: added item to display: "+item.formId, 2)
-			displayed += 1
-		endwhile
-		displayedcount += todisplay
 		count += 1
 	endwhile
 
@@ -204,7 +257,7 @@ bool Function RecalculateFDItemsInContainer()
 	if (FDItemsInContainer.Length == FDItemsInContainerNew.Length)
 		count = 0
 		while (same && count < FDItemsInContainer.Length)
-			same = FDItemsInContainer[count].GetFormID() == FDItemsInContainerNew[count].GetFormID()
+			same = FDItemsInContainer[count].formId == FDItemsInContainerNew[count].formId && FDItemsInContainer[count].count == FDItemsInContainerNew[count].count
 			count += 1
 		endwhile
 	else
@@ -216,112 +269,21 @@ bool Function RecalculateFDItemsInContainer()
 	return same 
 EndFunction
 
-
-Function DeleteFDMountItems()
-	Debug.Trace("DeleteFDMountItems called!", 2)
-	int MaxCount = FDMountStructArray.length
-	int Count = 0
-	While (Count < MaxCount)
-		If (FDMountStructArray[Count].FDMountItemDisplayRef != none)
-			FDMountStructArray[Count].FDMountItemDisplayRef.DisableNoWait(False)
-			FDMountStructArray[Count].FDMountItemDisplayRef.Delete()
-			FDMountStructArray[Count].FDMountItemDisplayRef = None
-		EndIf
-		Count += 1
-	EndWhile
-EndFunction
-
-
 Event OnLoad()
 	If (!AlreadyLoaded)
 		AlreadyLoaded = True
-		FDItemsInContainer = new Form[0]
+		FDItemsInContainer = new FDContainerItemType[0]
 		FDContainerItemTypeArray = new FDContainerItemType[0]
 		FDMountItemsInContainer = new Form[0]
-		FDWeaponsInContainer = new FDContainerItemType[0]
 	EndIf
 EndEvent
 
 
-int Function Log10(int number)
-	int result = 0
-	int power = 1
-	While (number >= power)
-		power *= 10
-		result += 1
-	EndWhile
-	return result
-EndFunction
 
-int Function Stack10(int number)
-	int result = (number - 1) / 10+1
-	return result
-EndFunction
 
-int Function to1(int number)
-	return number
-EndFunction
-
-Event OnItemAdded(Form akBaseItem, int aiItemCount, ObjectReference akItemReference, ObjectReference akSourceContainer)
-	Debug.Trace("OnItemAdded called! aiItemCount: "+ aiItemCount, 2)
-
-	if (akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown))
-			int itemCount = 0
-			while (itemCount < aiItemCount)
-				int count = 0
-				int freespace = 0
-				while(count < FunctionalDisplaysStructArray.length)
-					if (!FunctionalDisplaysStructArray[count].FDItemDisplayRef)
-						freespace += 1
-					endif
-					count += 1
-				endwhile
-				If (freespace - Self.GetItemCount() < 0)
-					Self.RemoveItem(akBaseItem, aiItemCount, False, Game.GetPlayer() as ObjectReference)
-					FunctionalDisplaysContainerFullMessage.Show(0, 0, 0, 0, 0, 0, 0, 0, 0)
-					return
-				Else
-					FDContainerItemType item = new FDContainerItemType
-					item.formObj = akBaseItem
-					FDWeaponsInContainer.Add(item)
-				EndIf
-				itemCount += 1
-			endwhile
-			return
-	Else 
-		Debug.Trace("OnItemAdded: item accepted", 2)
-			
-		int count = 0
-		int hasfound = 0
-		While (count < FDContainerItemTypeArray.Length)
-			Debug.Trace("OnItemAdded: searching for item type", 2)
-			If (FDContainerItemTypeArray[count].formId == akBaseItem.GetFormID())
-				FDContainerItemTypeArray[count].count += aiItemCount
-				Debug.Trace("OnItemAdded: item type ("+akBaseItem.GetFormID()+") found item count: "+FDContainerItemTypeArray[count].count, 2)
-				hasfound = 1
-			EndIf
-			count += 1
-		EndWhile
-
-		if(hasfound == 0)
-			FDContainerItemType item = new FDContainerItemType
-			item.formId = akBaseItem.GetFormID()
-			item.formObj = akBaseItem
-			item.count = aiItemCount
-			FDContainerItemTypeArray.Add(item)
-			Debug.Trace("OnItemAdded: new item type added ("+akBaseItem.GetFormID()+"). Item type count: "+FDContainerItemTypeArray.Length, 2)
-		EndIf
-		return
-	EndIf
-
-	Debug.Trace("OnItemAdded: item rejected", 2)
-	Self.RemoveItem(akBaseItem, aiItemCount, False, Game.GetPlayer() as ObjectReference)
-	FunctionalDisplaysContainerWrongMessage.Show(0, 0, 0, 0, 0, 0, 0, 0, 0)
-EndEvent
 
 Event OnWorkshopObjectDestroyed(ObjectReference akActionRef)
 	Self.DeleteFDItems()
-	Self.DeleteFDMountItems()
 EndEvent
 
 Function DoThing()
@@ -340,7 +302,7 @@ Event OnWorkshopObjectMoved(ObjectReference akReference)
 		While (Count < MaxCount)
 			if(FunctionalDisplaysStructArray[Count].FDItemDisplayRef)
 				Form akBaseItem = FunctionalDisplaysStructArray[Count].FDItemDisplayRef.GetBaseObject()
-				if(akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown))
+				if(IsWeapon(akBaseItem))
 					FunctionalDisplaysStructArray[Count].FDItemDisplayRef.SplineTranslateToRefNode(Self, FunctionalDisplaysStructArray[Count].FunctionalDisplaysNode, 0, 10000, 0)
 				endif
 			endif
@@ -348,6 +310,10 @@ Event OnWorkshopObjectMoved(ObjectReference akReference)
 		EndWhile
 	EndIf
 EndEvent
+
+bool function IsWeapon(Form akBaseItem)
+	return akBaseItem.HasKeyword(ObjectTypeWeapon) || akBaseItem.HasKeyword(WeaponTypePistol) || akBaseItem.HasKeyword(WeaponTypeRifle) || akBaseItem.HasKeyword(WeaponTypeMelee1H) || akBaseItem.HasKeyword(WeaponTypeMelee2H) || akBaseItem.HasKeyword(WeaponTypeHeavyGun) || akBaseItem.HasKeyword(WeaponTypeHandToHand) || akBaseItem.HasKeyword(WeaponTypeThrown)
+EndFunction
 
 ;-- State -------------------------------------------
 Auto State AllowActivate
@@ -358,13 +324,10 @@ Auto State AllowActivate
 		Self.AddInventoryEventFilter(None)
 		If (akActionRef == Game.GetPlayer() as ObjectReference)
 			Self.DeleteFDItems()
-			Self.DeleteFDMountItems()
-			Utility.Wait(0.1)
 			if(Self.GetItemCount() == 0)
-				FDItemsInContainer = new Form[0]
+				FDItemsInContainer = new FDContainerItemType[0]
 				FDContainerItemTypeArray = new FDContainerItemType[0]
 				FDMountItemsInContainer = new Form[0]
-				FDWeaponsInContainer = new FDContainerItemType[0]
 			ENDIF
 			Self.RecalculateFDItemsInContainer()
 			Self.DisplayFDItems()
